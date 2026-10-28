@@ -1,11 +1,10 @@
 package com.example.wifiradar
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.widget.Button
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -68,6 +67,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkPermissionsAndScan() {
+        // Проверяем, включен ли GPS в системе
+        if (!locationHelper.isLocationEnabled()) {
+            Toast.makeText(this, "Пожалуйста, включите Геолокацию (GPS) в шторке телефона!", Toast.LENGTH_LONG).show()
+            return
+        }
+
         val needed = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_WIFI_STATE,
@@ -84,8 +89,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startScanning() {
-        wifiScanner.start()
-        Toast.makeText(this, "Сканирование Wi-Fi...", Toast.LENGTH_SHORT).show()
+        try {
+            wifiScanner.start()
+            Toast.makeText(this, "Сканирование...", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun observeScanResults() {
@@ -96,7 +105,6 @@ class MainActivity : AppCompatActivity() {
 
                 for (result in results) {
                     val dist = WifiScanner.estimateDistance(result.level)
-                    // Угол из BSSID — стабильный и не меняется при пересканировании
                     val angle = (result.BSSID.hashCode() and 0x7FFFFFFF) % 360
                     val normDist = (dist / 50.0).coerceIn(0.05, 1.0).toFloat()
                     blips.add(angle.toFloat() to normDist)
@@ -108,11 +116,9 @@ class MainActivity : AppCompatActivity() {
                 binding.radarView.setBlips(blips)
                 binding.tvNetworks.text = sb.toString()
 
-                // Обновляем высоту
                 val loc = locationHelper.getCurrentLocation()
                 binding.tvAltitude.text = locationHelper.formatAltitude(loc)
 
-                // Сохраняем самую сильную сеть, если есть локация
                 if (loc != null && results.isNotEmpty()) {
                     val strongest = results.maxByOrNull { it.level } ?: return@collectLatest
                     val point = WifiPoint(
@@ -126,7 +132,8 @@ class MainActivity : AppCompatActivity() {
                         verticalAccuracy = if (loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else Float.NaN,
                         estimatedDistance = WifiScanner.estimateDistance(strongest.level)
                     )
-                    lifecycleScope.launch { db.wifiPointDao().insert(point) }
+                    // Сохраняем в базу
+                    launch { db.wifiPointDao().insert(point) }
                 }
             }
         }
