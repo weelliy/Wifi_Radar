@@ -4,12 +4,25 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Bundle
 import androidx.core.content.ContextCompat
 
 class LocationHelper(private val context: Context) {
 
     private val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    private var listener: ((Location?) -> Unit)? = null
+
+    private val locationListener = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+            listener?.invoke(location)
+        }
+        override fun onProviderDisabled(provider: String) {}
+        override fun onProviderEnabled(provider: String) {}
+        @Deprecated("Deprecated in Java")
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+    }
 
     fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
@@ -23,22 +36,43 @@ class LocationHelper(private val context: Context) {
     }
 
     @Suppress("MissingPermission")
-    fun getCurrentLocation(): Location? {
-        if (!hasLocationPermission() || !isLocationEnabled()) return null
+    fun startListening(onLocationUpdate: (Location?) -> Unit) {
+        if (!hasLocationPermission() || !isLocationEnabled()) {
+            onLocationUpdate(null)
+            return
+        }
+        listener = onLocationUpdate
         
-        // Получаем последнюю известную локацию (работает быстрее и стабильнее)
-        val lastGps = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-        val lastNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-        
-        return if (lastGps != null && lastNet != null) {
-            if (lastGps.time > lastNet.time) lastGps else lastNet
-        } else {
-            lastGps ?: lastNet
+        // Слушаем и GPS, и сеть для максимальной точности
+        try {
+            locationManager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                1000L, // обновление раз в 1 секунду
+                1f,    // минимальное изменение дистанции 1 метр
+                locationListener,
+                context.mainLooper
+            )
+            locationManager.requestLocationUpdates(
+                LocationManager.NETWORK_PROVIDER,
+                1000L,
+                1f,
+                locationListener,
+                context.mainLooper
+            )
+        } catch (e: Exception) {
+            onLocationUpdate(null)
         }
     }
 
+    fun stopListening() {
+        try {
+            locationManager.removeUpdates(locationListener)
+        } catch (_: Exception) {}
+        listener = null
+    }
+
     fun formatAltitude(location: Location?): String {
-        if (location == null || !location.hasAltitude()) return "Высота: н/д"
+        if (location == null || !location.hasAltitude()) return "Высота: н/д (ждем GPS)"
         val alt = location.altitude
         val acc = if (location.hasVerticalAccuracy()) location.verticalAccuracyMeters else Float.NaN
         return if (acc.isNaN()) {
