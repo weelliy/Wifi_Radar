@@ -1,7 +1,6 @@
 package com.example.wifiradar
 
 import android.content.Context
-import android.os.Environment
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -18,12 +17,12 @@ object ExportHelper {
     suspend fun exportCsv(context: Context, points: List<WifiPoint>) {
         val file = File(exportDir(context), "wifi_points_${timestamp()}.csv")
         file.bufferedWriter().use { w ->
-            w.write("id,ssid,bssid,rssi,frequency,latitude,longitude,altitude,vertical_accuracy,estimated_distance,timestamp\n")
+            w.write("id,ssid,bssid,rssi,frequency,latitude,longitude,altitude,vertical_accuracy,estimated_distance,floor,timestamp\n")
             for (p in points) {
                 w.write(
                     "${p.id},\"${p.ssid.replace("\"", "\"\"")}\",${p.bssid}," +
                     "${p.rssi},${p.frequency},${p.latitude},${p.longitude}," +
-                    "${p.altitude},${p.verticalAccuracy},${p.estimatedDistance},${p.timestamp}\n"
+                    "${p.altitude},${p.verticalAccuracy},${p.estimatedDistance},${p.floor},${p.timestamp}\n"
                 )
             }
         }
@@ -41,10 +40,11 @@ object ExportHelper {
             for (p in points) {
                 w.write("""
     <Placemark>
-      <name>${escapeXml(p.ssid)}</name>
+      <name>${escapeXml(p.ssid.ifEmpty { "(скрытая)" })}</name>
       <description>BSSID: ${p.bssid}
 RSSI: ${p.rssi} dBm
 Высота: ${p.altitude} м ± ${p.verticalAccuracy} м
+Этаж: ${p.floor}
 Оценка расстояния: ${"%.1f".format(p.estimatedDistance)} м</description>
       <Point>
         <coordinates>${p.longitude},${p.latitude},${p.altitude}</coordinates>
