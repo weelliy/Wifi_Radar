@@ -121,11 +121,18 @@ class MainActivity : AppCompatActivity() {
     private fun observeScanResults() {
         lifecycleScope.launch {
             wifiScanner.scanResults.collectLatest { results ->
-                currentResults = results
+                
+                // СОРТИРОВКА: Сначала самые сильные (близкие к 0), потом по дистанции
+                val sortedResults = results.sortedWith(
+                    compareByDescending<ScanResult> { it.level }
+                        .thenBy { WifiScanner.estimateDistance(it.level) }
+                )
+                
+                currentResults = sortedResults
                 val blips = mutableListOf<Pair<Float, Float>>()
                 val sb = StringBuilder()
 
-                for (result in results) {
+                for (result in sortedResults) {
                     val dist = WifiScanner.estimateDistance(result.level)
                     val angle = (result.BSSID.hashCode() and 0x7FFFFFFF) % 360
                     blips.add(angle.toFloat() to dist.toFloat())
@@ -152,8 +159,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Берем самую сильную сеть прямо сейчас
-        val strongest = currentResults.maxByOrNull { it.level } ?: return
+        // Берем этаж из текстового поля. Если пусто, ставим 0.
+        val floorStr = binding.etFloor.text.toString()
+        val currentFloor = floorStr.toIntOrNull() ?: 0
+
+        // Берем самую сильную сеть прямо сейчас (она первая в списке после сортировки)
+        val strongest = currentResults.firstOrNull() ?: return
         val loc = currentLocation!!
 
         val point = WifiPoint(
@@ -164,14 +175,14 @@ class MainActivity : AppCompatActivity() {
             latitude = loc.latitude,
             longitude = loc.longitude,
             altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
-            // Если точности нет, пишем -1.0, чтобы база не падала
             verticalAccuracy = if (loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else -1.0f,
-            estimatedDistance = WifiScanner.estimateDistance(strongest.level)
+            estimatedDistance = WifiScanner.estimateDistance(strongest.level),
+            floor = currentFloor // <-- Записываем этаж
         )
 
         lifecycleScope.launch {
             db.wifiPointDao().insert(point)
-            Toast.makeText(this@MainActivity, "Точка сохранена! Сеть: ${point.ssid}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MainActivity, "Точка сохранена! Сеть: ${point.ssid} (Этаж: $currentFloor)", Toast.LENGTH_SHORT).show()
         }
     }
 
