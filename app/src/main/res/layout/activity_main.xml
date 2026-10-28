@@ -12,7 +12,7 @@
         android:text="Координаты: ожидание GPS..."
         android:textSize="14sp"
         android:fontFamily="monospace"
-        android:paddingBottom="8dp"/>
+        android:paddingBottom="4dp"/>
 
     <com.example.wifiradar.RadarView
         android:id="@+id/radarView"
@@ -25,23 +25,40 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Высота: ожидание GPS..."
-        android:textSize="16sp"
+        android:textSize="14sp"
         android:textStyle="bold"
         android:padding="4dp" />
 
-    <!-- НОВОЕ: Поле для ввода этажа -->
-    <EditText
-        android:id="@+id/etFloor"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Введите этаж (например, 1 или -1)"
-        android:inputType="numberSigned"
-        android:padding="8dp"
-        android:layout_marginBottom="4dp"/>
+        android:orientation="horizontal">
+        
+        <EditText
+            android:id="@+id/etFloor"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:hint="Этаж"
+            android:inputType="numberSigned"
+            android:padding="8dp"
+            android:layout_marginEnd="8dp"/>
+
+        <!-- НОВОЕ: Поле ввода описания -->
+        <EditText
+            android:id="@+id/etDescription"
+            android:layout_width="0dp"
+            android:layout_weight="2"
+            android:layout_height="wrap_content"
+            android:hint="Описание (напр. корпус 3, каб. 211)"
+            android:inputType="text"
+            android:padding="8dp"
+            android:layout_marginBottom="4dp"/>
+    </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="100dp">
+        android:layout_height="80dp">
         <TextView
             android:id="@+id/tvNetworks"
             android:layout_width="match_parent"
