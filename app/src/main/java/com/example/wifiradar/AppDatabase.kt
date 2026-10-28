@@ -14,7 +14,8 @@ data class WifiPoint(
     val altitude: Double,
     val verticalAccuracy: Float,
     val estimatedDistance: Double,
-    val floor: Int = 0, // <-- НОВОЕ ПОЛЕ: этаж
+    val floor: Int = 0,
+    val description: String = "", // <-- НОВОЕ ПОЛЕ
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -30,7 +31,7 @@ interface WifiPointDao {
     suspend fun clearAll()
 }
 
-@Database(entities = [WifiPoint::class], version = 2, exportSchema = false) // <-- Версия увеличена до 2
+@Database(entities = [WifiPoint::class], version = 3, exportSchema = false) // <-- Версия 3
 abstract class AppDatabase : RoomDatabase() {
     abstract fun wifiPointDao(): WifiPointDao
 
@@ -43,7 +44,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "wifi_radar_db"
                 )
-                .fallbackToDestructiveMigration() // <-- Сносит старую базу и создает новую при смене версии
+                .fallbackToDestructiveMigration() 
                 .build().also { INSTANCE = it }
             }
     }
