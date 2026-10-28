@@ -5,6 +5,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import kotlin.math.cos
 import kotlin.math.sin
@@ -24,6 +26,11 @@ class RadarView @JvmOverloads constructor(
         strokeWidth = 2f
     }
 
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#81C784")
+        textSize = 30f
+    }
+
     private val sweepPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#4CAF50")
         style = Paint.Style.STROKE
@@ -41,9 +48,22 @@ class RadarView @JvmOverloads constructor(
     }
 
     private var sweepAngle = 0f
-
-    /** Список точек: Pair<угол в градусах, нормализованное расстояние 0..1> */
     private var blips: List<Pair<Float, Float>> = emptyList()
+    
+    // Базовое расстояние радара (до зума) - 50 метров
+    private var maxDistanceMeters = 50.0f
+    private var scaleFactor = 1.0f
+    private val minScale = 0.2f // Увеличение до 10 метров
+    private val maxScale = 2.0f // Отдаление до 100 метров
+
+    private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        override fun onScale(detector: ScaleGestureDetector): Boolean {
+            scaleFactor *= detector.scaleFactor
+            scaleFactor = scaleFactor.coerceIn(minScale, maxScale)
+            invalidate()
+            return true
+        }
+    })
 
     fun setBlips(newBlips: List<Pair<Float, Float>>) {
         blips = newBlips
@@ -60,6 +80,11 @@ class RadarView @JvmOverloads constructor(
         })
     }
 
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        scaleDetector.onTouchEvent(event)
+        return true
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val cx = width / 2f
@@ -69,9 +94,17 @@ class RadarView @JvmOverloads constructor(
         // Фон
         canvas.drawCircle(cx, cy, radius, bgPaint)
 
-        // Концентрические круги
+        // Текущая максимальная дистанция с учетом зума
+        val currentMaxDist = maxDistanceMeters / scaleFactor
+
+        // Концентрические круги (4 кольца)
         for (i in 1..4) {
-            canvas.drawCircle(cx, cy, radius * i / 4f, gridPaint)
+            val ringRadius = radius * i / 4f
+            canvas.drawCircle(cx, cy, ringRadius, gridPaint)
+            
+            // Подпись дистанции для каждого кольца
+            val distLabel = (currentMaxDist * i / 4).toInt()
+            canvas.drawText("${distLabel}м", cx + ringRadius - 50f, cy - 10f, textPaint)
         }
 
         // Линии осей
@@ -88,15 +121,17 @@ class RadarView @JvmOverloads constructor(
         )
 
         // Точки Wi-Fi
-        for ((angleDeg, normDist) in blips) {
+        for ((angleDeg, distanceMeters) in blips) {
             val a = Math.toRadians(angleDeg.toDouble())
-            val d = normDist * radius
+            // Нормализуем дистанцию относительно текущего масштаба
+            val normalizedDist = (distanceMeters / currentMaxDist).coerceIn(0.05f, 1.0f)
+            val d = normalizedDist * radius
             val x = cx + d * cos(a).toFloat()
             val y = cy + d * sin(a).toFloat()
-            canvas.drawCircle(x, y, 8f, blipPaint)
+            canvas.drawCircle(x, y, 12f, blipPaint)
         }
 
         // Центр (устройство)
-        canvas.drawCircle(cx, cy, 10f, centerPaint)
+        canvas.drawCircle(cx, cy, 15f, centerPaint)
     }
 }
