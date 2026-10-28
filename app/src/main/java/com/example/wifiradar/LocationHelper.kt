@@ -4,17 +4,12 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationManager
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
 
 class LocationHelper(private val context: Context) {
 
-    private val fusedClient: FusedLocationProviderClient =
-        LocationServices.getFusedLocationProviderClient(context)
+    private val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
     fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
@@ -22,24 +17,26 @@ class LocationHelper(private val context: Context) {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    /**
-     * Возвращает последнюю известную локацию с высокой точностью.
-     * Высота — над эллипсоидом WGS84 (метры).
-     * verticalAccuracyMeters — вертикальная погрешность (68% доверительный интервал).
-     */
-    suspend fun getCurrentLocation(): Location? = suspendCancellableCoroutine { cont ->
-        if (!hasLocationPermission()) {
-            cont.resume(null)
-            return@suspendCancellableCoroutine
-        }
-        fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-            .addOnSuccessListener { location -> cont.resume(location) }
-            .addOnFailureListener { cont.resume(null) }
+    fun isLocationEnabled(): Boolean {
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+               locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     }
 
-    /**
-     * Форматирует высоту с учётом погрешности, например: "125.3 м ± 8.0 м"
-     */
+    @Suppress("MissingPermission")
+    fun getCurrentLocation(): Location? {
+        if (!hasLocationPermission() || !isLocationEnabled()) return null
+        
+        // Получаем последнюю известную локацию (работает быстрее и стабильнее)
+        val lastGps = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+        val lastNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+        
+        return if (lastGps != null && lastNet != null) {
+            if (lastGps.time > lastNet.time) lastGps else lastNet
+        } else {
+            lastGps ?: lastNet
+        }
+    }
+
     fun formatAltitude(location: Location?): String {
         if (location == null || !location.hasAltitude()) return "Высота: н/д"
         val alt = location.altitude
