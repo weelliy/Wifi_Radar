@@ -14,6 +14,7 @@
         android:fontFamily="monospace"
         android:paddingBottom="4dp"/>
 
+    <!-- Радар занимает все свободное место -->
     <com.example.wifiradar.RadarView
         android:id="@+id/radarView"
         android:layout_width="match_parent"
@@ -29,36 +30,31 @@
         android:textStyle="bold"
         android:padding="4dp" />
 
-    <LinearLayout
+    <!-- Поле для этажа (теперь на всю ширину) -->
+    <EditText
+        android:id="@+id/etFloor"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
-        
-        <EditText
-            android:id="@+id/etFloor"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:hint="Этаж"
-            android:inputType="numberSigned"
-            android:padding="8dp"
-            android:layout_marginEnd="8dp"/>
+        android:hint="Введите этаж (например, 5 или -1)"
+        android:inputType="numberSigned"
+        android:padding="8dp"
+        android:layout_marginBottom="8dp"/>
 
-        <!-- НОВОЕ: Поле ввода описания -->
-        <EditText
-            android:id="@+id/etDescription"
-            android:layout_width="0dp"
-            android:layout_weight="2"
-            android:layout_height="wrap_content"
-            android:hint="Описание (напр. корпус 3, каб. 211)"
-            android:inputType="text"
-            android:padding="8dp"
-            android:layout_marginBottom="4dp"/>
-    </LinearLayout>
+    <!-- НОВОЕ: Поле для описания (теперь под этажом и на всю ширину) -->
+    <EditText
+        android:id="@+id/etDescription"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Описание (напр. корпус 3, кабинет 211)"
+        android:inputType="text"
+        android:padding="8dp"
+        android:layout_marginBottom="8dp"/>
 
+    <!-- Список сетей (сделал его чуть повыше) -->
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="80dp">
+        android:layout_height="100dp"
+        android:layout_marginBottom="8dp">
         <TextView
             android:id="@+id/tvNetworks"
             android:layout_width="match_parent"
@@ -73,14 +69,14 @@
         android:layout_height="wrap_content"
         android:text="📍 Зафиксировать точку (Сохранить)"
         android:backgroundTint="#FF9800"
-        android:textColor="#FFFFFF"/>
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="8dp"/>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="8dp">
-        <Button android:id="@+id/btnScan" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Сканировать" />
+        android:orientation="horizontal">
+        <Button android:id="@+id/btnScan" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Скан" />
         <Button android:id="@+id/btnExportCsv" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="CSV" />
         <Button android:id="@+id/btnExportKml" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="KML" />
         <Button android:id="@+id/btnClear" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Очистить" />
