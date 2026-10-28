@@ -27,7 +27,17 @@
         android:text="Высота: ожидание GPS..."
         android:textSize="16sp"
         android:textStyle="bold"
-        android:padding="8dp" />
+        android:padding="4dp" />
+
+    <!-- НОВОЕ: Поле для ввода этажа -->
+    <EditText
+        android:id="@+id/etFloor"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Введите этаж (например, 1 или -1)"
+        android:inputType="numberSigned"
+        android:padding="8dp"
+        android:layout_marginBottom="4dp"/>
 
     <ScrollView
         android:layout_width="match_parent"
