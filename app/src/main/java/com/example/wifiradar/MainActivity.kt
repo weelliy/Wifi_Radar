@@ -48,7 +48,6 @@ class MainActivity : AppCompatActivity() {
         binding.radarView.startSweep()
 
         binding.btnScan.setOnClickListener { checkPermissionsAndScan() }
-        
         binding.btnMarkPoint.setOnClickListener { markCurrentPoint() }
 
         binding.btnExportCsv.setOnClickListener {
@@ -122,7 +121,6 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             wifiScanner.scanResults.collectLatest { results ->
                 
-                // СОРТИРОВКА: Сначала самые сильные (близкие к 0), потом по дистанции
                 val sortedResults = results.sortedWith(
                     compareByDescending<ScanResult> { it.level }
                         .thenBy { WifiScanner.estimateDistance(it.level) }
@@ -159,11 +157,10 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Берем этаж из текстового поля. Если пусто, ставим 0.
         val floorStr = binding.etFloor.text.toString()
         val currentFloor = floorStr.toIntOrNull() ?: 0
+        val currentDescription = binding.etDescription.text.toString() // <-- Читаем описание
 
-        // Берем самую сильную сеть прямо сейчас (она первая в списке после сортировки)
         val strongest = currentResults.firstOrNull() ?: return
         val loc = currentLocation!!
 
@@ -177,12 +174,16 @@ class MainActivity : AppCompatActivity() {
             altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
             verticalAccuracy = if (loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else -1.0f,
             estimatedDistance = WifiScanner.estimateDistance(strongest.level),
-            floor = currentFloor // <-- Записываем этаж
+            floor = currentFloor,
+            description = currentDescription // <-- Сохраняем описание
         )
 
         lifecycleScope.launch {
             db.wifiPointDao().insert(point)
-            Toast.makeText(this@MainActivity, "Точка сохранена! Сеть: ${point.ssid} (Этаж: $currentFloor)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MainActivity, "Точка сохранена!\nСеть: ${point.ssid}\nЭтаж: $currentFloor\nМесто: $currentDescription", Toast.LENGTH_LONG).show()
+            
+            // Очищаем описание, чтобы не записать его же следующей точке
+            binding.etDescription.text?.clear()
         }
     }
 
