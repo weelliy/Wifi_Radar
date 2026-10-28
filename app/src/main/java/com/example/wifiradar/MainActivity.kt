@@ -129,7 +129,7 @@ class MainActivity : AppCompatActivity() {
                         latitude = loc.latitude,
                         longitude = loc.longitude,
                         altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
-                        verticalAccuracy = if (loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else Float.NaN,
+                        verticalAccuracy = if (loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else -1.0f,
                         estimatedDistance = WifiScanner.estimateDistance(strongest.level)
                     )
                     // Сохраняем в базу
