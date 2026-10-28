@@ -17,12 +17,14 @@ object ExportHelper {
     suspend fun exportCsv(context: Context, points: List<WifiPoint>) {
         val file = File(exportDir(context), "wifi_points_${timestamp()}.csv")
         file.bufferedWriter().use { w ->
-            w.write("id,ssid,bssid,rssi,frequency,latitude,longitude,altitude,vertical_accuracy,estimated_distance,floor,timestamp\n")
+            // Добавили description в заголовок
+            w.write("id,ssid,bssid,rssi,frequency,latitude,longitude,altitude,vertical_accuracy,estimated_distance,floor,description,timestamp\n")
             for (p in points) {
                 w.write(
                     "${p.id},\"${p.ssid.replace("\"", "\"\"")}\",${p.bssid}," +
                     "${p.rssi},${p.frequency},${p.latitude},${p.longitude}," +
-                    "${p.altitude},${p.verticalAccuracy},${p.estimatedDistance},${p.floor},${p.timestamp}\n"
+                    "${p.altitude},${p.verticalAccuracy},${p.estimatedDistance},${p.floor}," +
+                    "\"${p.description.replace("\"", "\"\"")}\",${p.timestamp}\n" // <-- Добавили описание
                 )
             }
         }
@@ -45,6 +47,7 @@ object ExportHelper {
 RSSI: ${p.rssi} dBm
 Высота: ${p.altitude} м ± ${p.verticalAccuracy} м
 Этаж: ${p.floor}
+Описание: ${escapeXml(p.description)} 
 Оценка расстояния: ${"%.1f".format(p.estimatedDistance)} м</description>
       <Point>
         <coordinates>${p.longitude},${p.latitude},${p.altitude}</coordinates>
