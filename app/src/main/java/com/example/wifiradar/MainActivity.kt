@@ -28,12 +28,13 @@ class MainActivity : AppCompatActivity() {
     private var currentLocation: Location? = null
     private var currentResults: List<ScanResult> = emptyList()
 
-    // Переменные для автозаписи
     private var isAutoRecording = false
     private var autoRecordJob: Job? = null
 
-    // Максимальный радиус, в пределах которого сохраняются сети при фиксации (в метрах)
-    private val MAX_SAVE_RADIUS_METERS = 20.0
+    // НОВОЕ: Порог силы сигнала. 
+    // -75 dBm примерно равно 20 метрам в открытом пространстве. 
+    // Все, что слабее (например, -80, -90), будет отсекаться.
+    private val MAX_RSSI_THRESHOLD = -75
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -143,7 +144,6 @@ class MainActivity : AppCompatActivity() {
     private fun observeScanResults() {
         lifecycleScope.launch {
             wifiScanner.scanResults.collectLatest { results ->
-                // Сортировка по силе сигнала (сначала самые мощные)
                 val sortedResults = results.sortedWith(
                     compareByDescending<ScanResult> { it.level }
                         .thenBy { WifiScanner.estimateDistance(it.level) }
@@ -169,7 +169,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- ЛОГИКА АВТОЗАПИСИ ---
     private fun startAutoRecording() {
         if (!locationHelper.isLocationEnabled()) {
             Toast.makeText(this, "Включите GPS для автозаписи!", Toast.LENGTH_SHORT).show()
@@ -181,7 +180,6 @@ class MainActivity : AppCompatActivity() {
         
         autoRecordJob = lifecycleScope.launch {
             while (isActive && isAutoRecording) {
-                // Раз в 10 секунд сохраняем все сети в радиусе
                 savePointsInRadius(isAuto = true)
                 delay(10000) // 10 секунд
             }
@@ -198,7 +196,6 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, "Автозапись остановлена", Toast.LENGTH_SHORT).show()
     }
 
-    // --- СОХРАНЕНИЕ ВСЕХ СЕТЕЙ В РАДИУСЕ ---
     private fun savePointsInRadius(isAuto: Boolean) {
         if (currentLocation == null) {
             if (!isAuto) Toast.makeText(this, "Ожидание GPS...", Toast.LENGTH_SHORT).show()
@@ -213,13 +210,14 @@ class MainActivity : AppCompatActivity() {
         val currentFloor = floorStr.toIntOrNull() ?: 0
         val currentDescription = binding.etDescription.text.toString()
 
-        // ФИЛЬТРАЦИЯ: Оставляем только те сети, расстояние до которых <= 20 метров
+        // ФИЛЬТРАЦИЯ ПО RSSI: 
+        // Берем сети, у которых уровень сигнала >= -75 dBm (то есть -40, -50, -60...)
         val validNetworks = currentResults.filter { 
-            WifiScanner.estimateDistance(it.level) <= MAX_SAVE_RADIUS_METERS 
+            it.level >= MAX_RSSI_THRESHOLD 
         }
 
         if (validNetworks.isEmpty()) {
-            if (!isAuto) Toast.makeText(this, "Нет сетей ближе $MAX_SAVE_RADIUS_METERS м", Toast.LENGTH_SHORT).show()
+            if (!isAuto) Toast.makeText(this, "Нет сетей с сигналом лучше $MAX_RSSI_THRESHOLD dBm", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -228,7 +226,7 @@ class MainActivity : AppCompatActivity() {
             WifiPoint(
                 ssid = result.SSID.ifEmpty { "(скрытая)" },
                 bssid = result.BSSID,
-                rssi = result.level, // Сила сигнала от текущей точки
+                rssi = result.level, // Записываем силу сигнала от текущей точки
                 frequency = result.frequency,
                 latitude = loc.latitude,
                 longitude = loc.longitude,
@@ -243,12 +241,8 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             pointsToSave.forEach { db.wifiPointDao().insert(it) }
             if (!isAuto) {
-                Toast.makeText(this@MainActivity, "Сохранено ${pointsToSave.size} сетей в радиусе $MAX_SAVE_RADIUS_METERS м", Toast.LENGTH_LONG).show()
-                // Очищаем описание после ручного сохранения, чтобы не дублировать
+                Toast.makeText(this@MainActivity, "Сохранено ${pointsToSave.size} сетей (сигнал > $MAX_RSSI_THRESHOLD dBm)", Toast.LENGTH_LONG).show()
                 binding.etDescription.text?.clear()
-            } else {
-                // При автозаписи можно выводить тихое уведомление или просто писать в лог
-                // Toast.makeText(this@MainActivity, "Автосохранение: ${pointsToSave.size} сетей", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -263,7 +257,6 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         locationHelper.stopListening()
-        // Останавливаем автозапись при сворачивании, чтобы не жрать батарею в фоне
         if (isAutoRecording) {
             stopAutoRecording()
         }
