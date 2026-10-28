@@ -12,7 +12,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.wifiradar.databinding.ActivityMainBinding
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -24,6 +27,13 @@ class MainActivity : AppCompatActivity() {
 
     private var currentLocation: Location? = null
     private var currentResults: List<ScanResult> = emptyList()
+
+    // Переменные для автозаписи
+    private var isAutoRecording = false
+    private var autoRecordJob: Job? = null
+
+    // Максимальный радиус, в пределах которого сохраняются сети при фиксации (в метрах)
+    private val MAX_SAVE_RADIUS_METERS = 20.0
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -48,7 +58,18 @@ class MainActivity : AppCompatActivity() {
         binding.radarView.startSweep()
 
         binding.btnScan.setOnClickListener { checkPermissionsAndScan() }
-        binding.btnMarkPoint.setOnClickListener { markCurrentPoint() }
+        
+        binding.btnMarkPoint.setOnClickListener { 
+            savePointsInRadius(isAuto = false) 
+        }
+
+        binding.btnAutoRecord.setOnClickListener {
+            if (isAutoRecording) {
+                stopAutoRecording()
+            } else {
+                startAutoRecording()
+            }
+        }
 
         binding.btnExportCsv.setOnClickListener {
             lifecycleScope.launch {
@@ -109,9 +130,11 @@ class MainActivity : AppCompatActivity() {
             currentLocation = loc
             if (loc != null) {
                 binding.tvLocation.text = "Координаты: ${"%.6f".format(loc.latitude)}, ${"%.6f".format(loc.longitude)}"
+                binding.tvAccuracy.text = locationHelper.formatAccuracy(loc)
                 binding.tvAltitude.text = locationHelper.formatAltitude(loc)
             } else {
                 binding.tvLocation.text = "Координаты: нет сигнала GPS"
+                binding.tvAccuracy.text = "Точность: н/д"
                 binding.tvAltitude.text = "Высота: нет сигнала GPS"
             }
         }
@@ -120,7 +143,7 @@ class MainActivity : AppCompatActivity() {
     private fun observeScanResults() {
         lifecycleScope.launch {
             wifiScanner.scanResults.collectLatest { results ->
-                
+                // Сортировка по силе сигнала (сначала самые мощные)
                 val sortedResults = results.sortedWith(
                     compareByDescending<ScanResult> { it.level }
                         .thenBy { WifiScanner.estimateDistance(it.level) }
@@ -137,7 +160,7 @@ class MainActivity : AppCompatActivity() {
 
                     sb.append("${result.SSID.ifEmpty { "(скрытая)" }}\n")
                     sb.append("  BSSID: ${result.BSSID} | RSSI: ${result.level} dBm\n")
-                    sb.append("  Примерное расстояние: ~${"%.1f".format(dist)} м\n")
+                    sb.append("  Расстояние: ~${"%.1f".format(dist)} м\n")
                 }
 
                 binding.radarView.setBlips(blips)
@@ -146,44 +169,87 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun markCurrentPoint() {
-        if (currentLocation == null) {
-            Toast.makeText(this, "Ожидание GPS... Выйдите на улицу или подождите.", Toast.LENGTH_LONG).show()
+    // --- ЛОГИКА АВТОЗАПИСИ ---
+    private fun startAutoRecording() {
+        if (!locationHelper.isLocationEnabled()) {
+            Toast.makeText(this, "Включите GPS для автозаписи!", Toast.LENGTH_SHORT).show()
             return
         }
+        isAutoRecording = true
+        binding.btnAutoRecord.text = "⏹ Стоп"
+        binding.btnAutoRecord.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_red_dark)
+        
+        autoRecordJob = lifecycleScope.launch {
+            while (isActive && isAutoRecording) {
+                // Раз в 10 секунд сохраняем все сети в радиусе
+                savePointsInRadius(isAuto = true)
+                delay(10000) // 10 секунд
+            }
+        }
+        Toast.makeText(this, "Автозапись включена (каждые 10 сек)", Toast.LENGTH_SHORT).show()
+    }
 
+    private fun stopAutoRecording() {
+        isAutoRecording = false
+        autoRecordJob?.cancel()
+        autoRecordJob = null
+        binding.btnAutoRecord.text = "⏺ Авто"
+        binding.btnAutoRecord.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_blue_dark)
+        Toast.makeText(this, "Автозапись остановлена", Toast.LENGTH_SHORT).show()
+    }
+
+    // --- СОХРАНЕНИЕ ВСЕХ СЕТЕЙ В РАДИУСЕ ---
+    private fun savePointsInRadius(isAuto: Boolean) {
+        if (currentLocation == null) {
+            if (!isAuto) Toast.makeText(this, "Ожидание GPS...", Toast.LENGTH_SHORT).show()
+            return
+        }
         if (currentResults.isEmpty()) {
-            Toast.makeText(this, "Сначала нажмите 'Сканировать', чтобы найти сети", Toast.LENGTH_SHORT).show()
+            if (!isAuto) Toast.makeText(this, "Сначала нажмите 'Скан'", Toast.LENGTH_SHORT).show()
             return
         }
 
         val floorStr = binding.etFloor.text.toString()
         val currentFloor = floorStr.toIntOrNull() ?: 0
-        val currentDescription = binding.etDescription.text.toString() // <-- Читаем описание
+        val currentDescription = binding.etDescription.text.toString()
 
-        val strongest = currentResults.firstOrNull() ?: return
+        // ФИЛЬТРАЦИЯ: Оставляем только те сети, расстояние до которых <= 20 метров
+        val validNetworks = currentResults.filter { 
+            WifiScanner.estimateDistance(it.level) <= MAX_SAVE_RADIUS_METERS 
+        }
+
+        if (validNetworks.isEmpty()) {
+            if (!isAuto) Toast.makeText(this, "Нет сетей ближе $MAX_SAVE_RADIUS_METERS м", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val loc = currentLocation!!
-
-        val point = WifiPoint(
-            ssid = strongest.SSID.ifEmpty { "(скрытая)" },
-            bssid = strongest.BSSID,
-            rssi = strongest.level,
-            frequency = strongest.frequency,
-            latitude = loc.latitude,
-            longitude = loc.longitude,
-            altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
-            verticalAccuracy = if (loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else -1.0f,
-            estimatedDistance = WifiScanner.estimateDistance(strongest.level),
-            floor = currentFloor,
-            description = currentDescription // <-- Сохраняем описание
-        )
+        val pointsToSave = validNetworks.map { result ->
+            WifiPoint(
+                ssid = result.SSID.ifEmpty { "(скрытая)" },
+                bssid = result.BSSID,
+                rssi = result.level, // Сила сигнала от текущей точки
+                frequency = result.frequency,
+                latitude = loc.latitude,
+                longitude = loc.longitude,
+                altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
+                verticalAccuracy = if (loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else -1.0f,
+                estimatedDistance = WifiScanner.estimateDistance(result.level),
+                floor = currentFloor,
+                description = currentDescription
+            )
+        }
 
         lifecycleScope.launch {
-            db.wifiPointDao().insert(point)
-            Toast.makeText(this@MainActivity, "Точка сохранена!\nСеть: ${point.ssid}\nЭтаж: $currentFloor\nМесто: $currentDescription", Toast.LENGTH_LONG).show()
-            
-            // Очищаем описание, чтобы не записать его же следующей точке
-            binding.etDescription.text?.clear()
+            pointsToSave.forEach { db.wifiPointDao().insert(it) }
+            if (!isAuto) {
+                Toast.makeText(this@MainActivity, "Сохранено ${pointsToSave.size} сетей в радиусе $MAX_SAVE_RADIUS_METERS м", Toast.LENGTH_LONG).show()
+                // Очищаем описание после ручного сохранения, чтобы не дублировать
+                binding.etDescription.text?.clear()
+            } else {
+                // При автозаписи можно выводить тихое уведомление или просто писать в лог
+                // Toast.makeText(this@MainActivity, "Автосохранение: ${pointsToSave.size} сетей", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -197,6 +263,10 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         locationHelper.stopListening()
+        // Останавливаем автозапись при сворачивании, чтобы не жрать батарею в фоне
+        if (isAutoRecording) {
+            stopAutoRecording()
+        }
     }
 
     override fun onDestroy() {
