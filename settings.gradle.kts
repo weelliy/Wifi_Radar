@@ -1,6 +1,6 @@
 pluginManagement {
     repositories {
-        google()
+        google()  // <-- Именно эта строка отвечает за поиск плагина Android
         mavenCentral()
         gradlePluginPortal()
     }
