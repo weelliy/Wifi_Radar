@@ -5,6 +5,7 @@
     android:orientation="vertical"
     android:padding="16dp">
 
+    <!-- Блок с координатами и точностью -->
     <TextView
         android:id="@+id/tvLocation"
         android:layout_width="match_parent"
@@ -12,9 +13,19 @@
         android:text="Координаты: ожидание GPS..."
         android:textSize="14sp"
         android:fontFamily="monospace"
-        android:paddingBottom="4dp"/>
+        android:paddingBottom="2dp"/>
 
-    <!-- Радар занимает все свободное место -->
+    <TextView
+        android:id="@+id/tvAccuracy"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Точность: н/д"
+        android:textSize="14sp"
+        android:textColor="#4CAF50"
+        android:fontFamily="monospace"
+        android:paddingBottom="8dp"/>
+
+    <!-- Радар -->
     <com.example.wifiradar.RadarView
         android:id="@+id/radarView"
         android:layout_width="match_parent"
@@ -30,7 +41,7 @@
         android:textStyle="bold"
         android:padding="4dp" />
 
-    <!-- Поле для этажа (теперь на всю ширину) -->
+    <!-- Поля ввода -->
     <EditText
         android:id="@+id/etFloor"
         android:layout_width="match_parent"
@@ -40,7 +51,6 @@
         android:padding="8dp"
         android:layout_marginBottom="8dp"/>
 
-    <!-- НОВОЕ: Поле для описания (теперь под этажом и на всю ширину) -->
     <EditText
         android:id="@+id/etDescription"
         android:layout_width="match_parent"
@@ -50,7 +60,6 @@
         android:padding="8dp"
         android:layout_marginBottom="8dp"/>
 
-    <!-- Список сетей (сделал его чуть повыше) -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="100dp"
@@ -63,15 +72,34 @@
             android:fontFamily="monospace" />
     </ScrollView>
 
-    <Button
-        android:id="@+id/btnMarkPoint"
+    <!-- Кнопки фиксации и автозаписи -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="📍 Зафиксировать точку (Сохранить)"
-        android:backgroundTint="#FF9800"
-        android:textColor="#FFFFFF"
-        android:layout_marginBottom="8dp"/>
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+        
+        <Button
+            android:id="@+id/btnMarkPoint"
+            android:layout_width="0dp"
+            android:layout_weight="2"
+            android:layout_height="wrap_content"
+            android:text="📍 Зафиксировать"
+            android:backgroundTint="#FF9800"
+            android:textColor="#FFFFFF"
+            android:layout_marginEnd="8dp"/>
 
+        <Button
+            android:id="@+id/btnAutoRecord"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="⏺ Авто"
+            android:backgroundTint="#2196F3"
+            android:textColor="#FFFFFF"/>
+    </LinearLayout>
+
+    <!-- Нижние кнопки -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
