@@ -43,12 +43,11 @@ class LocationHelper(private val context: Context) {
         }
         listener = onLocationUpdate
         
-        // Слушаем и GPS, и сеть для максимальной точности
         try {
             locationManager.requestLocationUpdates(
                 LocationManager.GPS_PROVIDER,
-                1000L, // обновление раз в 1 секунду
-                1f,    // минимальное изменение дистанции 1 метр
+                1000L,
+                1f,
                 locationListener,
                 context.mainLooper
             )
@@ -69,6 +68,11 @@ class LocationHelper(private val context: Context) {
             locationManager.removeUpdates(locationListener)
         } catch (_: Exception) {}
         listener = null
+    }
+
+    fun formatAccuracy(location: Location?): String {
+        if (location == null || !location.hasAccuracy()) return "Точность: н/д"
+        return "Точность: ~${location.accuracy.toInt()} м"
     }
 
     fun formatAltitude(location: Location?): String {
