@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Существующие разрешения -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -10,10 +11,16 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- НОВЫЕ РАЗРЕШЕНИЯ ДЛЯ ФОНОВОЙ СЛУЖБЫ -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
         android:theme="@style/Theme.WifiRadar">
+        
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -22,5 +29,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- РЕГИСТРАЦИЯ НОВОЙ СЛУЖБЫ -->
+        <service 
+            android:name=".WifiRecordingService"
+            android:foregroundServiceType="dataSync" 
+            android:exported="false" />
+            
     </application>
 </manifest>
