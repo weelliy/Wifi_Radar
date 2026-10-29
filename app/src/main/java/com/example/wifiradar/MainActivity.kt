@@ -1,6 +1,7 @@
 package com.example.wifiradar
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.wifi.ScanResult
@@ -12,10 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.wifiradar.databinding.ActivityMainBinding
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -27,13 +25,8 @@ class MainActivity : AppCompatActivity() {
 
     private var currentLocation: Location? = null
     private var currentResults: List<ScanResult> = emptyList()
-
     private var isAutoRecording = false
-    private var autoRecordJob: Job? = null
 
-    // НОВОЕ: Порог силы сигнала. 
-    // -75 dBm примерно равно 20 метрам в открытом пространстве. 
-    // Все, что слабее (например, -80, -90), будет отсекаться.
     private val MAX_RSSI_THRESHOLD = -75
 
     private val permissionLauncher = registerForActivityResult(
@@ -43,7 +36,7 @@ class MainActivity : AppCompatActivity() {
             startScanning()
             startLocationUpdates()
         } else {
-            Toast.makeText(this, "Нужны разрешения для сканирования и GPS", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Нужны разрешения для работы приложения", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -66,9 +59,9 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnAutoRecord.setOnClickListener {
             if (isAutoRecording) {
-                stopAutoRecording()
+                stopAutoRecordingService()
             } else {
-                startAutoRecording()
+                startAutoRecordingService()
             }
         }
 
@@ -107,6 +100,7 @@ class MainActivity : AppCompatActivity() {
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             needed.add(Manifest.permission.NEARBY_WIFI_DEVICES)
+            needed.add(Manifest.permission.POST_NOTIFICATIONS) // Для фоновой службы
         }
         
         if (needed.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
@@ -169,33 +163,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startAutoRecording() {
+    // --- УПРАВЛЕНИЕ ФОНОВОЙ СЛУЖБОЙ ---
+    private fun startAutoRecordingService() {
         if (!locationHelper.isLocationEnabled()) {
             Toast.makeText(this, "Включите GPS для автозаписи!", Toast.LENGTH_SHORT).show()
             return
         }
+
+        // Проверка разрешения на уведомления для Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            Toast.makeText(this, "Разрешите уведомления для фоновой записи", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val floor = binding.etFloor.text.toString().toIntOrNull() ?: 0
+        val description = binding.etDescription.text.toString()
+
+        val intent = Intent(this, WifiRecordingService::class.java).apply {
+            putExtra("floor", floor)
+            putExtra("description", description)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+
         isAutoRecording = true
         binding.btnAutoRecord.text = "⏹ Стоп"
         binding.btnAutoRecord.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_red_dark)
-        
-        autoRecordJob = lifecycleScope.launch {
-            while (isActive && isAutoRecording) {
-                savePointsInRadius(isAuto = true)
-                delay(10000) // 10 секунд
-            }
-        }
-        Toast.makeText(this, "Автозапись включена (каждые 10 сек)", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Фоновая запись запущена", Toast.LENGTH_SHORT).show()
     }
 
-    private fun stopAutoRecording() {
+    private fun stopAutoRecordingService() {
+        val intent = Intent(this, WifiRecordingService::class.java).apply {
+            action = "STOP"
+        }
+        startService(intent)
+
         isAutoRecording = false
-        autoRecordJob?.cancel()
-        autoRecordJob = null
         binding.btnAutoRecord.text = "⏺ Авто"
         binding.btnAutoRecord.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_blue_dark)
-        Toast.makeText(this, "Автозапись остановлена", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Фоновая запись остановлена", Toast.LENGTH_SHORT).show()
     }
 
+    // --- РУЧНОЕ СОХРАНЕНИЕ ---
     private fun savePointsInRadius(isAuto: Boolean) {
         if (currentLocation == null) {
             if (!isAuto) Toast.makeText(this, "Ожидание GPS...", Toast.LENGTH_SHORT).show()
@@ -210,11 +225,7 @@ class MainActivity : AppCompatActivity() {
         val currentFloor = floorStr.toIntOrNull() ?: 0
         val currentDescription = binding.etDescription.text.toString()
 
-        // ФИЛЬТРАЦИЯ ПО RSSI: 
-        // Берем сети, у которых уровень сигнала >= -75 dBm (то есть -40, -50, -60...)
-        val validNetworks = currentResults.filter { 
-            it.level >= MAX_RSSI_THRESHOLD 
-        }
+        val validNetworks = currentResults.filter { it.level >= MAX_RSSI_THRESHOLD }
 
         if (validNetworks.isEmpty()) {
             if (!isAuto) Toast.makeText(this, "Нет сетей с сигналом лучше $MAX_RSSI_THRESHOLD dBm", Toast.LENGTH_SHORT).show()
@@ -226,7 +237,7 @@ class MainActivity : AppCompatActivity() {
             WifiPoint(
                 ssid = result.SSID.ifEmpty { "(скрытая)" },
                 bssid = result.BSSID,
-                rssi = result.level, // Записываем силу сигнала от текущей точки
+                rssi = result.level,
                 frequency = result.frequency,
                 latitude = loc.latitude,
                 longitude = loc.longitude,
@@ -241,7 +252,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             pointsToSave.forEach { db.wifiPointDao().insert(it) }
             if (!isAuto) {
-                Toast.makeText(this@MainActivity, "Сохранено ${pointsToSave.size} сетей (сигнал > $MAX_RSSI_THRESHOLD dBm)", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, "Сохранено ${pointsToSave.size} сетей", Toast.LENGTH_LONG).show()
                 binding.etDescription.text?.clear()
             }
         }
@@ -257,9 +268,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         locationHelper.stopListening()
-        if (isAutoRecording) {
-            stopAutoRecording()
-        }
+        // Обратите внимание: мы БОЛЬШЕ НЕ ОСТАНАВЛИВАЕМ автозапись при сворачивании!
     }
 
     override fun onDestroy() {
