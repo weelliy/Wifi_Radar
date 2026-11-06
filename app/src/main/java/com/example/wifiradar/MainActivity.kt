@@ -80,16 +80,15 @@ class MainActivity : AppCompatActivity() {
         binding.btnClear.setOnClickListener {
             lifecycleScope.launch {
                 db.wifiPointDao().clearAll()
-                updatePointCount() // Обновляем счетчик
+                updatePointCount()
                 Toast.makeText(this@MainActivity, "База очищена", Toast.LENGTH_SHORT).show()
             }
         }
 
         observeScanResults()
-        updatePointCount() // Показываем счетчик при запуске
+        updatePointCount()
     }
 
-    // --- НОВЫЙ МЕТОД: Обновление счетчика ---
     private fun updatePointCount() {
         lifecycleScope.launch {
             val count = db.wifiPointDao().getCount()
@@ -154,20 +153,27 @@ class MainActivity : AppCompatActivity() {
                 )
                 
                 currentResults = sortedResults
-                val blips = mutableListOf<Pair<Float, Float>>()
+                
+                // НОВОЕ: Формируем список зон (Расстояние в метрах, SSID)
+                val zones = mutableListOf<Pair<Float, String>>()
                 val sb = StringBuilder()
 
                 for (result in sortedResults) {
                     val dist = WifiScanner.estimateDistance(result.level)
-                    val angle = (result.BSSID.hashCode() and 0x7FFFFFFF) % 360
-                    blips.add(angle.toFloat() to dist.toFloat())
+                    
+                    // Берем только те сети, что в пределах видимости радара (например, до 100 метров)
+                    if (dist < 100.0) {
+                        val ssidText = result.SSID.ifEmpty { "(скрытая)" }
+                        zones.add(dist.toFloat() to ssidText)
+                    }
 
                     sb.append("${result.SSID.ifEmpty { "(скрытая)" }}\n")
                     sb.append("  BSSID: ${result.BSSID} | RSSI: ${result.level} dBm\n")
                     sb.append("  Расстояние: ~${"%.1f".format(dist)} м\n")
                 }
 
-                binding.radarView.setBlips(blips)
+                // Передаем зоны в радар
+                binding.radarView.setWifiZones(zones)
                 binding.tvNetworks.text = sb.toString()
             }
         }
@@ -216,8 +222,6 @@ class MainActivity : AppCompatActivity() {
         binding.btnAutoRecord.text = "⏺ Авто"
         binding.btnAutoRecord.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_blue_dark)
         Toast.makeText(this, "Фоновая запись остановлена", Toast.LENGTH_SHORT).show()
-        
-        // Обновляем счетчик после остановки, так как служба могла добавить точки
         updatePointCount()
     }
 
@@ -264,7 +268,7 @@ class MainActivity : AppCompatActivity() {
             if (!isAuto) {
                 Toast.makeText(this@MainActivity, "Сохранено ${pointsToSave.size} сетей", Toast.LENGTH_LONG).show()
                 binding.etDescription.text?.clear()
-                updatePointCount() // Обновляем счетчик
+                updatePointCount()
             }
         }
     }
@@ -274,7 +278,6 @@ class MainActivity : AppCompatActivity() {
         if (locationHelper.hasLocationPermission() && locationHelper.isLocationEnabled()) {
             startLocationUpdates()
         }
-        // Обновляем счетчик при возвращении в приложение (если служба работала в фоне)
         updatePointCount()
     }
 
