@@ -154,14 +154,13 @@ class MainActivity : AppCompatActivity() {
                 
                 currentResults = sortedResults
                 
-                // НОВОЕ: Формируем список зон (Расстояние в метрах, SSID)
+                // ТЕПЕРЬ МЫ СОЗДАЕМ ZONES, А НЕ BLIPS
                 val zones = mutableListOf<Pair<Float, String>>()
                 val sb = StringBuilder()
 
                 for (result in sortedResults) {
                     val dist = WifiScanner.estimateDistance(result.level)
                     
-                    // Берем только те сети, что в пределах видимости радара (например, до 100 метров)
                     if (dist < 100.0) {
                         val ssidText = result.SSID.ifEmpty { "(скрытая)" }
                         zones.add(dist.toFloat() to ssidText)
@@ -172,7 +171,7 @@ class MainActivity : AppCompatActivity() {
                     sb.append("  Расстояние: ~${"%.1f".format(dist)} м\n")
                 }
 
-                // Передаем зоны в радар
+                // ВЫЗЫВАЕМ НОВУЮ ФУНКЦИЮ
                 binding.radarView.setWifiZones(zones)
                 binding.tvNetworks.text = sb.toString()
             }
