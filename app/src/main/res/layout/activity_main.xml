@@ -5,7 +5,6 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <!-- Блок с координатами и точностью -->
     <TextView
         android:id="@+id/tvLocation"
         android:layout_width="match_parent"
@@ -23,9 +22,20 @@
         android:textSize="14sp"
         android:textColor="#4CAF50"
         android:fontFamily="monospace"
+        android:paddingBottom="2dp"/>
+
+    <!-- НОВОЕ: Счетчик точек -->
+    <TextView
+        android:id="@+id/tvPointsCount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Всего сохранено точек: 0"
+        android:textSize="14sp"
+        android:textColor="#FF9800"
+        android:textStyle="bold"
+        android:fontFamily="monospace"
         android:paddingBottom="8dp"/>
 
-    <!-- Радар -->
     <com.example.wifiradar.RadarView
         android:id="@+id/radarView"
         android:layout_width="match_parent"
@@ -41,7 +51,6 @@
         android:textStyle="bold"
         android:padding="4dp" />
 
-    <!-- Поля ввода -->
     <EditText
         android:id="@+id/etFloor"
         android:layout_width="match_parent"
@@ -72,7 +81,6 @@
             android:fontFamily="monospace" />
     </ScrollView>
 
-    <!-- Кнопки фиксации и автозаписи -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -99,7 +107,6 @@
             android:textColor="#FFFFFF"/>
     </LinearLayout>
 
-    <!-- Нижние кнопки -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
