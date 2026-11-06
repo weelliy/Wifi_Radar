@@ -15,7 +15,7 @@ data class WifiPoint(
     val verticalAccuracy: Float,
     val estimatedDistance: Double,
     val floor: Int = 0,
-    val description: String = "", // <-- НОВОЕ ПОЛЕ
+    val description: String = "", 
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -27,11 +27,15 @@ interface WifiPointDao {
     @Query("SELECT * FROM wifi_points ORDER BY timestamp DESC")
     suspend fun getAll(): List<WifiPoint>
 
+    // НОВЫЙ МЕТОД: Получение количества сохраненных точек
+    @Query("SELECT COUNT(*) FROM wifi_points")
+    suspend fun getCount(): Int
+
     @Query("DELETE FROM wifi_points")
     suspend fun clearAll()
 }
 
-@Database(entities = [WifiPoint::class], version = 3, exportSchema = false) // <-- Версия 3
+@Database(entities = [WifiPoint::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun wifiPointDao(): WifiPointDao
 
