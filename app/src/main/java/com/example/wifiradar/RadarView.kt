@@ -29,20 +29,17 @@ class RadarView @JvmOverloads constructor(
         textSize = 30f
     }
 
-    // Кисть для рисования зон (полупрозрачная заливка)
     private val zoneFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#44FFEB3B") // Полупрозрачный желтый
+        color = Color.parseColor("#44FFEB3B")
         style = Paint.Style.FILL
     }
 
-    // Кисть для контура зон
     private val zoneStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFFFEB3B") // Яркий желтый
+        color = Color.parseColor("#FFFFEB3B")
         style = Paint.Style.STROKE
         strokeWidth = 3f
     }
 
-    // Кисть для текста (SSID) над кольцом
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = 25f
@@ -61,14 +58,12 @@ class RadarView @JvmOverloads constructor(
     }
 
     private var sweepAngle = 0f
-    
-    // Список сетей: (расстояние в метрах, имя сети)
     private var wifiZones: List<Pair<Float, String>> = emptyList()
     
     private var maxDistanceMeters = 50.0f
     private var scaleFactor = 1.0f
-    private val minScale = 0.2f // Увеличение до 10 метров
-    private val maxScale = 2.0f // Отдаление до 100 метров
+    private val minScale = 0.2f 
+    private val maxScale = 2.0f 
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
@@ -79,6 +74,7 @@ class RadarView @JvmOverloads constructor(
         }
     })
 
+    // ИМЕННО ЭТА ФУНКЦИЯ ТЕПЕРЬ НАЗЫВАЕТСЯ ТАК
     fun setWifiZones(newZones: List<Pair<Float, String>>) {
         wifiZones = newZones
         invalidate()
@@ -105,23 +101,18 @@ class RadarView @JvmOverloads constructor(
         val cy = height / 2f
         val radius = minOf(cx, cy) * 0.9f
 
-        // Фон
         canvas.drawCircle(cx, cy, radius, bgPaint)
 
-        // Текущая максимальная дистанция с учетом зума
         val currentMaxDist = maxDistanceMeters / scaleFactor
 
-        // Концентрические круги сетки (4 кольца)
         for (i in 1..4) {
             val ringRadius = radius * i / 4f
             canvas.drawCircle(cx, cy, ringRadius, gridPaint)
             
-            // Подпись дистанции для каждого кольца
             val distLabel = (currentMaxDist * i / 4).toInt()
             canvas.drawText("${distLabel}м", cx + ringRadius - 50f, cy - 10f, textPaint)
         }
 
-        // Вращающийся луч (для красоты)
         val rad = Math.toRadians(sweepAngle.toDouble())
         canvas.drawLine(
             cx, cy,
@@ -130,27 +121,20 @@ class RadarView @JvmOverloads constructor(
             sweepPaint
         )
 
-        // РИСУЕМ ЗОНЫ СЕТЕЙ
-        // Сортируем зоны по убыванию радиуса, чтобы большие рисовались сзади, а маленькие (близкие) поверх них
         val sortedZones = wifiZones.sortedByDescending { it.first }
 
         for ((distanceMeters, ssid) in sortedZones) {
             val normalizedDist = (distanceMeters / currentMaxDist).coerceIn(0.05f, 1.0f)
             val zoneRadius = normalizedDist * radius
             
-            // Рисуем полупрозрачный круг (зону)
             canvas.drawCircle(cx, cy, zoneRadius, zoneFillPaint)
-            // Рисуем контур
             canvas.drawCircle(cx, cy, zoneRadius, zoneStrokePaint)
             
-            // Пишем название сети над зоной (справа от оси Y)
             if (ssid.isNotEmpty()) {
-                // Немного поднимаем текст над линией кольца
                 canvas.drawText(ssid, cx + (zoneRadius * 0.7f), cy - (zoneRadius * 0.7f), labelPaint)
             }
         }
 
-        // Центр (устройство)
         canvas.drawCircle(cx, cy, 15f, centerPaint)
     }
 }
