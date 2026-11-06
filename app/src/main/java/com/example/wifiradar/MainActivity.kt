@@ -80,11 +80,21 @@ class MainActivity : AppCompatActivity() {
         binding.btnClear.setOnClickListener {
             lifecycleScope.launch {
                 db.wifiPointDao().clearAll()
+                updatePointCount() // Обновляем счетчик
                 Toast.makeText(this@MainActivity, "База очищена", Toast.LENGTH_SHORT).show()
             }
         }
 
         observeScanResults()
+        updatePointCount() // Показываем счетчик при запуске
+    }
+
+    // --- НОВЫЙ МЕТОД: Обновление счетчика ---
+    private fun updatePointCount() {
+        lifecycleScope.launch {
+            val count = db.wifiPointDao().getCount()
+            binding.tvPointsCount.text = "Всего сохранено точек: $count"
+        }
     }
 
     private fun checkPermissionsAndScan() {
@@ -100,7 +110,7 @@ class MainActivity : AppCompatActivity() {
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             needed.add(Manifest.permission.NEARBY_WIFI_DEVICES)
-            needed.add(Manifest.permission.POST_NOTIFICATIONS) // Для фоновой службы
+            needed.add(Manifest.permission.POST_NOTIFICATIONS)
         }
         
         if (needed.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
@@ -163,14 +173,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- УПРАВЛЕНИЕ ФОНОВОЙ СЛУЖБОЙ ---
     private fun startAutoRecordingService() {
         if (!locationHelper.isLocationEnabled()) {
             Toast.makeText(this, "Включите GPS для автозаписи!", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Проверка разрешения на уведомления для Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
@@ -195,7 +203,7 @@ class MainActivity : AppCompatActivity() {
         isAutoRecording = true
         binding.btnAutoRecord.text = "⏹ Стоп"
         binding.btnAutoRecord.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_red_dark)
-        Toast.makeText(this, "Фоновая запись запущена", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Фоновая запись запущена (Ждем точность <= 3м)", Toast.LENGTH_LONG).show()
     }
 
     private fun stopAutoRecordingService() {
@@ -208,9 +216,11 @@ class MainActivity : AppCompatActivity() {
         binding.btnAutoRecord.text = "⏺ Авто"
         binding.btnAutoRecord.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_blue_dark)
         Toast.makeText(this, "Фоновая запись остановлена", Toast.LENGTH_SHORT).show()
+        
+        // Обновляем счетчик после остановки, так как служба могла добавить точки
+        updatePointCount()
     }
 
-    // --- РУЧНОЕ СОХРАНЕНИЕ ---
     private fun savePointsInRadius(isAuto: Boolean) {
         if (currentLocation == null) {
             if (!isAuto) Toast.makeText(this, "Ожидание GPS...", Toast.LENGTH_SHORT).show()
@@ -254,6 +264,7 @@ class MainActivity : AppCompatActivity() {
             if (!isAuto) {
                 Toast.makeText(this@MainActivity, "Сохранено ${pointsToSave.size} сетей", Toast.LENGTH_LONG).show()
                 binding.etDescription.text?.clear()
+                updatePointCount() // Обновляем счетчик
             }
         }
     }
@@ -263,12 +274,13 @@ class MainActivity : AppCompatActivity() {
         if (locationHelper.hasLocationPermission() && locationHelper.isLocationEnabled()) {
             startLocationUpdates()
         }
+        // Обновляем счетчик при возвращении в приложение (если служба работала в фоне)
+        updatePointCount()
     }
 
     override fun onPause() {
         super.onPause()
         locationHelper.stopListening()
-        // Обратите внимание: мы БОЛЬШЕ НЕ ОСТАНАВЛИВАЕМ автозапись при сворачивании!
     }
 
     override fun onDestroy() {
