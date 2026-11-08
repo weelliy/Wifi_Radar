@@ -3,117 +3,48 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="12dp"
+    android:background="#050B14">
 
-    <TextView
-        android:id="@+id/tvLocation"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Координаты: ожидание GPS..."
-        android:textSize="14sp"
-        android:fontFamily="monospace"
-        android:paddingBottom="2dp"/>
+    <TextView android:id="@+id/tvLocation" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Координаты: ..." android:textColor="#00E5FF" android:fontFamily="monospace" />
+    <TextView android:id="@+id/tvAccuracy" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Точность: ..." android:textColor="#39FF14" android:fontFamily="monospace" />
+    <TextView android:id="@+id/tvPointsCount" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Точек: 0" android:textColor="#FFD700" android:fontFamily="monospace" />
 
-    <TextView
-        android:id="@+id/tvAccuracy"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Точность: н/д"
-        android:textSize="14sp"
-        android:textColor="#4CAF50"
-        android:fontFamily="monospace"
-        android:paddingBottom="2dp"/>
-
-    <!-- НОВОЕ: Счетчик точек -->
-    <TextView
-        android:id="@+id/tvPointsCount"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Всего сохранено точек: 0"
-        android:textSize="14sp"
-        android:textColor="#FF9800"
-        android:textStyle="bold"
-        android:fontFamily="monospace"
-        android:paddingBottom="8dp"/>
-
+    <!-- Радар -->
     <com.example.wifiradar.RadarView
         android:id="@+id/radarView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <TextView
-        android:id="@+id/tvAltitude"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Высота: ожидание GPS..."
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:padding="4dp" />
+    <TextView android:id="@+id/tvAltitude" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Высота: ..." android:textColor="#FFFFFF" android:fontFamily="monospace" />
 
-    <EditText
-        android:id="@+id/etFloor"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Введите этаж (например, 5 или -1)"
-        android:inputType="numberSigned"
-        android:padding="8dp"
-        android:layout_marginBottom="8dp"/>
-
-    <EditText
-        android:id="@+id/etDescription"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Описание (напр. корпус 3, кабинет 211)"
-        android:inputType="text"
-        android:padding="8dp"
-        android:layout_marginBottom="8dp"/>
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="100dp"
-        android:layout_marginBottom="8dp">
-        <TextView
-            android:id="@+id/tvNetworks"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:fontFamily="monospace" />
-    </ScrollView>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="8dp">
-        
-        <Button
-            android:id="@+id/btnMarkPoint"
-            android:layout_width="0dp"
-            android:layout_weight="2"
-            android:layout_height="wrap_content"
-            android:text="📍 Зафиксировать"
-            android:backgroundTint="#FF9800"
-            android:textColor="#FFFFFF"
-            android:layout_marginEnd="8dp"/>
-
-        <Button
-            android:id="@+id/btnAutoRecord"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:text="⏺ Авто"
-            android:backgroundTint="#2196F3"
-            android:textColor="#FFFFFF"/>
+    <!-- Настройки -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+        <Spinner android:id="@+id/spinnerEnvironment" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:entries="@array/environments" />
+        <RadioGroup android:id="@+id/rgFrequency" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="horizontal">
+            <RadioButton android:id="@+id/rbAll" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Все" android:textColor="#FFF" android:checked="true"/>
+            <RadioButton android:id="@+id/rb5G" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="5G" android:textColor="#FFF"/>
+        </RadioGroup>
     </LinearLayout>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
+    <EditText android:id="@+id/etFloor" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Этаж" android:inputType="numberSigned" android:textColor="#FFF" />
+    <EditText android:id="@+id/etDescription" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Описание" android:textColor="#FFF" />
+
+    <ScrollView android:layout_width="match_parent" android:layout_height="80dp">
+        <TextView android:id="@+id/tvNetworks" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#B0BEC5" android:textSize="11sp" android:fontFamily="monospace"/>
+    </ScrollView>
+
+    <!-- Кнопки -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+        <Button android:id="@+id/btnMarkPoint" android:layout_width="0dp" android:layout_weight="2" android:layout_height="wrap_content" android:text="📍 Фикс" android:backgroundTint="#FF9800" android:textColor="#FFF"/>
+        <Button android:id="@+id/btnAutoRecord" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="⏺ Авто" android:backgroundTint="#2196F3" android:textColor="#FFF"/>
+        <Button android:id="@+id/btnHistory" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="📜 Ист" android:backgroundTint="#9C27B0" android:textColor="#FFF"/>
+    </LinearLayout>
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
         <Button android:id="@+id/btnScan" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Скан" />
-        <Button android:id="@+id/btnExportCsv" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="CSV" />
-        <Button android:id="@+id/btnExportKml" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="KML" />
-        <Button android:id="@+id/btnClear" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Очистить" />
+        <Button android:id="@+id/btnShareCsv" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Share CSV" android:backgroundTint="#4CAF50"/>
+        <Button android:id="@+id/btnClear" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Очист" android:backgroundTint="#F44336"/>
     </LinearLayout>
 </LinearLayout>
