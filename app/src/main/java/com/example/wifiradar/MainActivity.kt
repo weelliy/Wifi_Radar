@@ -7,8 +7,9 @@ import android.location.Location
 import android.net.wifi.ScanResult
 import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -24,7 +25,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var db: AppDatabase
 
     private var currentLocation: Location? = null
-    private var currentResults: List<ScanResult> = emptyList()
+    private var rawResults: List<ScanResult> = emptyList()
+    private var filteredResults: List<ScanResult> = emptyList()
     private var isAutoRecording = false
 
     private val MAX_RSSI_THRESHOLD = -75
@@ -35,8 +37,6 @@ class MainActivity : AppCompatActivity() {
         if (grants.values.all { it }) {
             startScanning()
             startLocationUpdates()
-        } else {
-            Toast.makeText(this, "Нужны разрешения для работы приложения", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -51,29 +51,33 @@ class MainActivity : AppCompatActivity() {
 
         binding.radarView.startSweep()
 
+        // Настройка Spinner (Калибровка)
+        binding.spinnerEnvironment.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                wifiScanner.pathLossExponent = when(position) {
+                    0 -> 2.0 // Улица
+                    1 -> 3.0 // Офис
+                    else -> 4.0 // Бетон
+                }
+                observeScanResults() // Пересчитать
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Фильтры частот
+        binding.rgFrequency.setOnCheckedChangeListener { _, _ ->
+            observeScanResults()
+        }
+
         binding.btnScan.setOnClickListener { checkPermissionsAndScan() }
+        binding.btnMarkPoint.setOnClickListener { savePointsInRadius(false) }
+        binding.btnAutoRecord.setOnClickListener { toggleAutoRecord() }
+        binding.btnHistory.setOnClickListener { showHistoryDialog() }
         
-        binding.btnMarkPoint.setOnClickListener { 
-            savePointsInRadius(isAuto = false) 
-        }
-
-        binding.btnAutoRecord.setOnClickListener {
-            if (isAutoRecording) {
-                stopAutoRecordingService()
-            } else {
-                startAutoRecordingService()
-            }
-        }
-
-        binding.btnExportCsv.setOnClickListener {
+        binding.btnShareCsv.setOnClickListener {
             lifecycleScope.launch {
-                ExportHelper.exportCsv(this@MainActivity, db.wifiPointDao().getAll())
-            }
-        }
-
-        binding.btnExportKml.setOnClickListener {
-            lifecycleScope.launch {
-                ExportHelper.exportKml(this@MainActivity, db.wifiPointDao().getAll())
+                val file = ExportHelper.exportCsv(this@MainActivity, db.wifiPointDao().getAll())
+                ExportHelper.shareFile(this@MainActivity, file)
             }
         }
 
@@ -85,23 +89,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        observeScanResults()
         updatePointCount()
     }
 
-    private fun updatePointCount() {
-        lifecycleScope.launch {
-            val count = db.wifiPointDao().getCount()
-            binding.tvPointsCount.text = "Всего сохранено точек: $count"
-        }
-    }
-
     private fun checkPermissionsAndScan() {
-        if (!locationHelper.isLocationEnabled()) {
-            Toast.makeText(this, "Пожалуйста, включите Геолокацию (GPS) в шторке телефона!", Toast.LENGTH_LONG).show()
-            return
-        }
-
         val needed = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_WIFI_STATE,
@@ -111,7 +102,6 @@ class MainActivity : AppCompatActivity() {
             needed.add(Manifest.permission.NEARBY_WIFI_DEVICES)
             needed.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        
         if (needed.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
             startScanning()
             startLocationUpdates()
@@ -121,12 +111,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startScanning() {
-        try {
-            wifiScanner.start()
-            Toast.makeText(this, "Сканирование...", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(this, "Ошибка Wi-Fi: ${e.message}", Toast.LENGTH_LONG).show()
-        }
+        wifiScanner.start()
+        Toast.makeText(this, "Сканирование...", Toast.LENGTH_SHORT).show()
     }
 
     private fun startLocationUpdates() {
@@ -136,10 +122,6 @@ class MainActivity : AppCompatActivity() {
                 binding.tvLocation.text = "Координаты: ${"%.6f".format(loc.latitude)}, ${"%.6f".format(loc.longitude)}"
                 binding.tvAccuracy.text = locationHelper.formatAccuracy(loc)
                 binding.tvAltitude.text = locationHelper.formatAltitude(loc)
-            } else {
-                binding.tvLocation.text = "Координаты: нет сигнала GPS"
-                binding.tvAccuracy.text = "Точность: н/д"
-                binding.tvAltitude.text = "Высота: нет сигнала GPS"
             }
         }
     }
@@ -147,136 +129,108 @@ class MainActivity : AppCompatActivity() {
     private fun observeScanResults() {
         lifecycleScope.launch {
             wifiScanner.scanResults.collectLatest { results ->
-                val sortedResults = results.sortedWith(
-                    compareByDescending<ScanResult> { it.level }
-                        .thenBy { WifiScanner.estimateDistance(it.level) }
-                )
-                
-                currentResults = sortedResults
-                
-                // ТЕПЕРЬ МЫ СОЗДАЕМ ZONES, А НЕ BLIPS
-                val zones = mutableListOf<Pair<Float, String>>()
-                val sb = StringBuilder()
-
-                for (result in sortedResults) {
-                    val dist = WifiScanner.estimateDistance(result.level)
-                    
-                    if (dist < 100.0) {
-                        val ssidText = result.SSID.ifEmpty { "(скрытая)" }
-                        zones.add(dist.toFloat() to ssidText)
-                    }
-
-                    sb.append("${result.SSID.ifEmpty { "(скрытая)" }}\n")
-                    sb.append("  BSSID: ${result.BSSID} | RSSI: ${result.level} dBm\n")
-                    sb.append("  Расстояние: ~${"%.1f".format(dist)} м\n")
-                }
-
-                // ВЫЗЫВАЕМ НОВУЮ ФУНКЦИЮ
-                binding.radarView.setWifiZones(zones)
-                binding.tvNetworks.text = sb.toString()
+                rawResults = results
+                applyFilters()
             }
         }
     }
 
-    private fun startAutoRecordingService() {
-        if (!locationHelper.isLocationEnabled()) {
-            Toast.makeText(this, "Включите GPS для автозаписи!", Toast.LENGTH_SHORT).show()
-            return
+    private fun applyFilters() {
+        val is5GOnly = binding.rb5G.isChecked
+
+        filteredResults = rawResults.filter { result ->
+            // Фильтр частоты: 5G это > 5000 МГц
+            if (is5GOnly && result.frequency < 5000) return@filter false
+            true
+        }.sortedWith(compareByDescending<ScanResult> { it.level }.thenBy { wifiScanner.estimateDistance(it.level) })
+
+        val zones = mutableListOf<Triple<Float, String, Int>>()
+        val sb = StringBuilder()
+
+        for (result in filteredResults) {
+            val dist = wifiScanner.estimateDistance(result.level)
+            if (dist < 100.0) {
+                zones.add(Triple(dist.toFloat(), result.SSID.ifEmpty { "(скрытая)" }, result.level))
+            }
+            sb.append("${result.SSID.ifEmpty { "(скрытая)" }} | ${result.level} dBm\n")
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
-            Toast.makeText(this, "Разрешите уведомления для фоновой записи", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        val floor = binding.etFloor.text.toString().toIntOrNull() ?: 0
-        val description = binding.etDescription.text.toString()
-
-        val intent = Intent(this, WifiRecordingService::class.java).apply {
-            putExtra("floor", floor)
-            putExtra("description", description)
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
-
-        isAutoRecording = true
-        binding.btnAutoRecord.text = "⏹ Стоп"
-        binding.btnAutoRecord.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_red_dark)
-        Toast.makeText(this, "Фоновая запись запущена (Ждем точность <= 3м)", Toast.LENGTH_LONG).show()
+        binding.radarView.setWifiZones(zones)
+        binding.tvNetworks.text = sb.toString()
     }
 
-    private fun stopAutoRecordingService() {
-        val intent = Intent(this, WifiRecordingService::class.java).apply {
-            action = "STOP"
+    private fun showHistoryDialog() {
+        lifecycleScope.launch {
+            val points = db.wifiPointDao().getAll()
+            if (points.isEmpty()) {
+                Toast.makeText(this@MainActivity, "История пуста", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val sb = StringBuilder()
+            points.take(50).forEach { p -> // Берем последние 50
+                sb.append("📍 ${p.ssid} (${p.rssi} dBm)\n")
+                sb.append("Этаж: ${p.floor} | ${p.description}\n")
+                sb.append("${"%.5f".format(p.latitude)}, ${"%.5f".format(p.longitude)}\n\n")
+            }
+            
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("История точек (последние 50)")
+                .setMessage(sb.toString())
+                .setPositiveButton("Закрыть", null)
+                .show()
         }
-        startService(intent)
+    }
 
-        isAutoRecording = false
-        binding.btnAutoRecord.text = "⏺ Авто"
-        binding.btnAutoRecord.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_blue_dark)
-        Toast.makeText(this, "Фоновая запись остановлена", Toast.LENGTH_SHORT).show()
-        updatePointCount()
+    private fun toggleAutoRecord() {
+        if (isAutoRecording) {
+            val intent = Intent(this, WifiRecordingService::class.java).apply { action = "STOP" }
+            startService(intent)
+            isAutoRecording = false
+            binding.btnAutoRecord.text = "⏺ Авто"
+        } else {
+            val intent = Intent(this, WifiRecordingService::class.java).apply {
+                putExtra("floor", binding.etFloor.text.toString().toIntOrNull() ?: 0)
+                putExtra("description", binding.etDescription.text.toString())
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+            isAutoRecording = true
+            binding.btnAutoRecord.text = "⏹ Стоп"
+        }
     }
 
     private fun savePointsInRadius(isAuto: Boolean) {
-        if (currentLocation == null) {
-            if (!isAuto) Toast.makeText(this, "Ожидание GPS...", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (currentResults.isEmpty()) {
-            if (!isAuto) Toast.makeText(this, "Сначала нажмите 'Скан'", Toast.LENGTH_SHORT).show()
-            return
-        }
+        val loc = currentLocation ?: return
+        val valid = filteredResults.filter { it.level >= MAX_RSSI_THRESHOLD }
+        if (valid.isEmpty()) return
 
-        val floorStr = binding.etFloor.text.toString()
-        val currentFloor = floorStr.toIntOrNull() ?: 0
-        val currentDescription = binding.etDescription.text.toString()
+        val floor = binding.etFloor.text.toString().toIntOrNull() ?: 0
+        val desc = binding.etDescription.text.toString()
 
-        val validNetworks = currentResults.filter { it.level >= MAX_RSSI_THRESHOLD }
-
-        if (validNetworks.isEmpty()) {
-            if (!isAuto) Toast.makeText(this, "Нет сетей с сигналом лучше $MAX_RSSI_THRESHOLD dBm", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val loc = currentLocation!!
-        val pointsToSave = validNetworks.map { result ->
+        val pointsToSave = valid.map { result ->
             WifiPoint(
-                ssid = result.SSID.ifEmpty { "(скрытая)" },
-                bssid = result.BSSID,
-                rssi = result.level,
-                frequency = result.frequency,
-                latitude = loc.latitude,
-                longitude = loc.longitude,
+                ssid = result.SSID.ifEmpty { "(скрытая)" }, bssid = result.BSSID, rssi = result.level,
+                frequency = result.frequency, latitude = loc.latitude, longitude = loc.longitude,
                 altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
                 verticalAccuracy = if (loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else -1.0f,
-                estimatedDistance = WifiScanner.estimateDistance(result.level),
-                floor = currentFloor,
-                description = currentDescription
+                estimatedDistance = wifiScanner.estimateDistance(result.level), floor = floor, description = desc
             )
         }
-
         lifecycleScope.launch {
             pointsToSave.forEach { db.wifiPointDao().insert(it) }
-            if (!isAuto) {
-                Toast.makeText(this@MainActivity, "Сохранено ${pointsToSave.size} сетей", Toast.LENGTH_LONG).show()
-                binding.etDescription.text?.clear()
-                updatePointCount()
-            }
+            updatePointCount()
+            Toast.makeText(this@MainActivity, "Сохранено ${pointsToSave.size} сетей", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun updatePointCount() {
+        lifecycleScope.launch {
+            binding.tvPointsCount.text = "Точек в базе: ${db.wifiPointDao().getCount()}"
         }
     }
 
     override fun onResume() {
         super.onResume()
-        if (locationHelper.hasLocationPermission() && locationHelper.isLocationEnabled()) {
-            startLocationUpdates()
-        }
+        startLocationUpdates()
         updatePointCount()
     }
 
