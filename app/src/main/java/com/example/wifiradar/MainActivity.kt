@@ -139,7 +139,6 @@ class MainActivity : AppCompatActivity() {
         val is5GOnly = binding.rb5G.isChecked
 
         filteredResults = rawResults.filter { result ->
-            // Фильтр частоты: 5G это > 5000 МГц
             if (is5GOnly && result.frequency < 5000) return@filter false
             true
         }.sortedWith(compareByDescending<ScanResult> { it.level }.thenBy { wifiScanner.estimateDistance(it.level) })
@@ -167,7 +166,7 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
             val sb = StringBuilder()
-            points.take(50).forEach { p -> // Берем последние 50
+            points.take(50).forEach { p ->
                 sb.append("📍 ${p.ssid} (${p.rssi} dBm)\n")
                 sb.append("Этаж: ${p.floor} | ${p.description}\n")
                 sb.append("${"%.5f".format(p.latitude)}, ${"%.5f".format(p.longitude)}\n\n")
@@ -206,25 +205,37 @@ class MainActivity : AppCompatActivity() {
         val floor = binding.etFloor.text.toString().toIntOrNull() ?: 0
         val desc = binding.etDescription.text.toString()
 
+        // Генерируем ОДНО время для всего пакета сетей
+        val batchTimestamp = System.currentTimeMillis()
+
         val pointsToSave = valid.map { result ->
             WifiPoint(
-                ssid = result.SSID.ifEmpty { "(скрытая)" }, bssid = result.BSSID, rssi = result.level,
-                frequency = result.frequency, latitude = loc.latitude, longitude = loc.longitude,
+                ssid = result.SSID.ifEmpty { "(скрытая)" }, 
+                bssid = result.BSSID, 
+                rssi = result.level,
+                frequency = result.frequency, 
+                latitude = loc.latitude, 
+                longitude = loc.longitude,
                 altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
                 verticalAccuracy = if (loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else -1.0f,
-                estimatedDistance = wifiScanner.estimateDistance(result.level), floor = floor, description = desc
+                estimatedDistance = wifiScanner.estimateDistance(result.level), 
+                floor = floor, 
+                description = desc,
+                timestamp = batchTimestamp // <-- ОДИНАКОВОЕ ВРЕМЯ ДЛЯ ВСЕХ
             )
         }
+        
         lifecycleScope.launch {
             pointsToSave.forEach { db.wifiPointDao().insert(it) }
             updatePointCount()
-            Toast.makeText(this@MainActivity, "Сохранено ${pointsToSave.size} сетей", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MainActivity, "Замер сохранен (${pointsToSave.size} сетей)", Toast.LENGTH_SHORT).show()
+            binding.etDescription.text?.clear()
         }
     }
 
     private fun updatePointCount() {
         lifecycleScope.launch {
-            binding.tvPointsCount.text = "Точек в базе: ${db.wifiPointDao().getCount()}"
+            binding.tvPointsCount.text = "Замеров в базе: ${db.wifiPointDao().getCount()}"
         }
     }
 
