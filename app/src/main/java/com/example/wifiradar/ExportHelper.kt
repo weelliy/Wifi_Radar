@@ -1,10 +1,12 @@
 package com.example.wifiradar
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.core.content.FileProvider
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
 
 object ExportHelper {
 
@@ -14,66 +16,40 @@ object ExportHelper {
         return dir
     }
 
-    suspend fun exportCsv(context: Context, points: List<WifiPoint>) {
+    suspend fun exportCsv(context: Context, points: List<WifiPoint>): File {
         val file = File(exportDir(context), "wifi_points_${timestamp()}.csv")
         file.bufferedWriter().use { w ->
-            // Добавили description в заголовок
             w.write("id,ssid,bssid,rssi,frequency,latitude,longitude,altitude,vertical_accuracy,estimated_distance,floor,description,timestamp\n")
             for (p in points) {
-                w.write(
-                    "${p.id},\"${p.ssid.replace("\"", "\"\"")}\",${p.bssid}," +
-                    "${p.rssi},${p.frequency},${p.latitude},${p.longitude}," +
-                    "${p.altitude},${p.verticalAccuracy},${p.estimatedDistance},${p.floor}," +
-                    "\"${p.description.replace("\"", "\"\"")}\",${p.timestamp}\n" // <-- Добавили описание
-                )
+                w.write("${p.id},\"${p.ssid.replace("\"", "\"\"")}\",${p.bssid},${p.rssi},${p.frequency},${p.latitude},${p.longitude},${p.altitude},${p.verticalAccuracy},${p.estimatedDistance},${p.floor},\"${p.description.replace("\"", "\"\"")}\",${p.timestamp}\n")
             }
         }
-        notifyExported(context, file)
+        return file
     }
 
-    suspend fun exportKml(context: Context, points: List<WifiPoint>) {
+    suspend fun exportKml(context: Context, points: List<WifiPoint>): File {
         val file = File(exportDir(context), "wifi_points_${timestamp()}.kml")
         file.bufferedWriter().use { w ->
-            w.write("""<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name>Wi-Fi Radar Points</name>
-""")
+            w.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n<Document>\n<name>Wi-Fi Radar Points</name>\n")
             for (p in points) {
-                w.write("""
-    <Placemark>
-      <name>${escapeXml(p.ssid.ifEmpty { "(скрытая)" })}</name>
-      <description>BSSID: ${p.bssid}
-RSSI: ${p.rssi} dBm
-Высота: ${p.altitude} м ± ${p.verticalAccuracy} м
-Этаж: ${p.floor}
-Описание: ${escapeXml(p.description)} 
-Оценка расстояния: ${"%.1f".format(p.estimatedDistance)} м</description>
-      <Point>
-        <coordinates>${p.longitude},${p.latitude},${p.altitude}</coordinates>
-      </Point>
-    </Placemark>
-""")
+                w.write("<Placemark>\n<name>${escapeXml(p.ssid)}</name>\n<description>BSSID: ${p.bssid}\nRSSI: ${p.rssi} dBm\nВысота: ${p.altitude} м\nЭтаж: ${p.floor}\nОписание: ${escapeXml(p.description)}</description>\n<Point>\n<coordinates>${p.longitude},${p.latitude},${p.altitude}</coordinates>\n</Point>\n</Placemark>\n")
             }
-            w.write("  </Document>\n</kml>")
+            w.write("</Document>\n</kml>")
         }
-        notifyExported(context, file)
+        return file
     }
 
-    private fun timestamp(): String =
-        SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-
-    private fun escapeXml(s: String): String = s
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace("\"", "&quot;")
-
-    private fun notifyExported(context: Context, file: File) {
-        android.widget.Toast.makeText(
-            context,
-            "Экспортировано: ${file.absolutePath}",
-            android.widget.Toast.LENGTH_LONG
-        ).show()
+    fun shareFile(context: Context, file: File) {
+        val uri: Uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = if (file.extension == "csv") "text/csv" else "application/vnd.google-earth.kml+xml"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Отправить файл..."))
     }
+
+    private fun timestamp(): String = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+
+    private fun escapeXml(s: String): String = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 }
