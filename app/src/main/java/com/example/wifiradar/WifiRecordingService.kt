@@ -29,9 +29,12 @@ class WifiRecordingService : Service() {
     private lateinit var wifiManager: WifiManager
     private lateinit var locationManager: LocationManager
     private lateinit var notificationManager: NotificationManager
+    
+    // ДОБАВЛЕНО: Экземпляр сканера для доступа к estimateDistance
+    private lateinit var wifiScanner: WifiScanner
 
     private val MAX_RSSI_THRESHOLD = -75
-    private val MAX_ACCURACY_METERS = 3.0f // Максимальная погрешность GPS для сохранения
+    private val MAX_ACCURACY_METERS = 3.0f
 
     override fun onCreate() {
         super.onCreate()
@@ -39,6 +42,9 @@ class WifiRecordingService : Service() {
         wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         locationManager = applicationContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        
+        // Инициализируем сканер
+        wifiScanner = WifiScanner(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -73,17 +79,11 @@ class WifiRecordingService : Service() {
                 val accuracy = if (loc != null && loc.hasAccuracy()) loc.accuracy else 999f
 
                 if (accuracy <= MAX_ACCURACY_METERS) {
-                    // Точность хорошая (0-3 метра) - сохраняем точки
                     val savedCount = performScanAndSave(floor, description, loc!!)
                     updateNotification("Запись активна", "Точность ~${accuracy.toInt()}м. Сохранено сетей: $savedCount")
-                    
-                    // Ждем обычный интервал (10 секунд)
                     delay(10000) 
                 } else {
-                    // Точность плохая (больше 3 метров) - не сохраняем, ждем 1 секунду
                     updateNotification("Ожидание GPS...", "Точность ~${accuracy.toInt()}м (нужно <= 3м)")
-                    
-                    // Проверяем чаще (раз в секунду)
                     delay(1000) 
                 }
             }
@@ -93,7 +93,7 @@ class WifiRecordingService : Service() {
     private suspend fun performScanAndSave(floor: Int, description: String, loc: Location): Int {
         try {
             wifiManager.startScan()
-            delay(2000) // Ждем завершения сканирования
+            delay(2000)
             val results = wifiManager.scanResults ?: return 0
 
             val validNetworks = results.filter { it.level >= MAX_RSSI_THRESHOLD }
@@ -109,7 +109,8 @@ class WifiRecordingService : Service() {
                         longitude = loc.longitude,
                         altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
                         verticalAccuracy = if (loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else -1.0f,
-                        estimatedDistance = WifiScanner.estimateDistance(result.level),
+                        // ИСПОЛЬЗУЕМ ЭКЗЕМПЛЯР СКАНЕРА
+                        estimatedDistance = wifiScanner.estimateDistance(result.level),
                         floor = floor,
                         description = description
                     )
