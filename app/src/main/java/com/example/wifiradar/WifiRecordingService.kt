@@ -29,8 +29,6 @@ class WifiRecordingService : Service() {
     private lateinit var wifiManager: WifiManager
     private lateinit var locationManager: LocationManager
     private lateinit var notificationManager: NotificationManager
-    
-    // ДОБАВЛЕНО: Экземпляр сканера для доступа к estimateDistance
     private lateinit var wifiScanner: WifiScanner
 
     private val MAX_RSSI_THRESHOLD = -75
@@ -42,8 +40,6 @@ class WifiRecordingService : Service() {
         wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         locationManager = applicationContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        
-        // Инициализируем сканер
         wifiScanner = WifiScanner(this)
     }
 
@@ -99,6 +95,9 @@ class WifiRecordingService : Service() {
             val validNetworks = results.filter { it.level >= MAX_RSSI_THRESHOLD }
 
             if (validNetworks.isNotEmpty()) {
+                // ОДНО ВРЕМЯ ДЛЯ ВСЕГО ПАКЕТА
+                val batchTimestamp = System.currentTimeMillis()
+
                 val points = validNetworks.map { result ->
                     WifiPoint(
                         ssid = result.SSID.ifEmpty { "(скрытая)" },
@@ -109,10 +108,10 @@ class WifiRecordingService : Service() {
                         longitude = loc.longitude,
                         altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
                         verticalAccuracy = if (loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else -1.0f,
-                        // ИСПОЛЬЗУЕМ ЭКЗЕМПЛЯР СКАНЕРА
                         estimatedDistance = wifiScanner.estimateDistance(result.level),
                         floor = floor,
-                        description = description
+                        description = description,
+                        timestamp = batchTimestamp // <-- ОДИНАКОВОЕ ВРЕМЯ
                     )
                 }
                 withContext(Dispatchers.IO) {
