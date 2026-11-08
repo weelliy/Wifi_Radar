@@ -27,8 +27,8 @@ interface WifiPointDao {
     @Query("SELECT * FROM wifi_points ORDER BY timestamp DESC")
     suspend fun getAll(): List<WifiPoint>
 
-    // НОВЫЙ МЕТОД: Получение количества сохраненных точек
-    @Query("SELECT COUNT(*) FROM wifi_points")
+    // СЧИТАЕМ УНИКАЛЬНЫЕ ЗАМЕРЫ (по времени)
+    @Query("SELECT COUNT(DISTINCT timestamp) FROM wifi_points")
     suspend fun getCount(): Int
 
     @Query("DELETE FROM wifi_points")
